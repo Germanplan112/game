@@ -1,0 +1,11 @@
+{
+  "name": "Счет: Оранжевый спасатель",
+  "short_name": "Оранжевый плюс",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#f7931e",
+  "icons": [
+    {"src": "icon.png", "sizes": "512x512", "type": "image/png"}
+  ]
+}

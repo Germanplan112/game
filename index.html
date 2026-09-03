@@ -3,43 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <title>Счет: Оранжевый спасатель</title>
+    
+    <!-- Настройки для PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f7931e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <style>
-        body { margin:0; background:#1a1a2e; color:white; font-family:Arial; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; }
+        body { margin:0; background:#1a1a2e; color:white; font-family:Arial, sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; overflow:hidden; }
         #game-container { position:relative; width:600px; height:800px; border:4px solid #f7931e; background:#16213e; box-shadow:0 0 20px rgba(247,147,30,0.5); }
-        #player { position:absolute; width:60px; height:60px; background:#0d6efd; bottom:20px; left:50%; transform:translateX(-50%); border-radius:10px; box-shadow:0 0 15px blue; }
-        .item { position:absolute; width:40px; height:40px; display:flex; justify-content:center; align-items:center; font-size:24px; user-select:none; animation:fall linear forwards; }
+        
+        #player { 
+            position:absolute; width:60px; height:60px; background:#0d6efd; bottom:20px; left:50%; transform:translateX(-50%); 
+            border-radius:10px; box-shadow:0 0 15px blue; transition:left 0.05s linear; 
+        }
+        
+        .item { 
+            position:absolute; width:40px; height:40px; display:flex; justify-content:center; align-items:center; 
+            font-size:24px; user-select:none; animation:fall linear forwards;
+        }
+        
         .plus { background:#f7931e; color:black; border-radius:50%; font-weight:bold; }
         .minus { background:#e63946; color:white; border-radius:50%; font-weight:bold; }
+        
         @keyframes fall { from { top:-50px; } to { top:100%; } }
-        #ui { position:absolute; top:10px; width:100%; text-align:center; pointer-events:none; }
+        
+        /* ИНТЕРФЕЙС */
+        #ui { position:absolute; top:10px; width:100%; text-align:center; pointer-events:none; z-index:10; }
         #scoreboard { font-size:28px; background:rgba(0,0,0,0.5); padding:10px; display:inline-block; border-radius:8px; }
+        
+        /* ПАНЕЛЬ РЕКОРДОВ */
+        #records-panel {
+            position: absolute; top: 60px; right: 10px; background: rgba(0,0,0,0.8); padding: 15px; 
+            border-radius: 10px; pointer-events: auto; max-width: 250px; line-height: 1.4;
+        }
+        #records-panel h3 { margin: 0 0 10px 0; font-size: 18px; color: #f7931e; }
+        #best-score { font-size: 24px; font-weight: bold; color: white; }
+        #reset-btn { 
+            margin-top: 10px; padding: 8px 12px; background:#e63946; color:white; border:none; 
+            border-radius:5px; cursor:pointer; font-size:14px; width: 100%;
+        }
+        #reset-btn:hover { background:#c52b37; }
     </style>
 </head>
 <body>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js');
-  });
-}
-</script>
+
 <div id="game-container">
-    <div id="ui"><div id="scoreboard">Счет: 0 | Жизни: 3</div></div>
+    <div id="ui">
+        <div id="scoreboard">Счет: 0 | Жизни: 3</div>
+    </div>
+    
+    <!-- Панель рекордов -->
+    <div id="records-panel">
+        <h3>Рекорды</h3>
+        <div>Лучший счет: <span id="best-score">0</span></div>
+        <button id="reset-btn">Обнулить рекорд</button>
+    </div>
+
     <div id="player"></div>
 </div>
+
 <script>
+// --- РАБОТА С ЛОКАЛЬНЫМ ХРАНИЛИЩЕМ ---
+let bestScore = parseInt(localStorage.getItem('orangePlusBest')) || 0;
+document.getElementById('best-score').textContent = bestScore;
+
+function updateBestScore(current) {
+    if (current > bestScore) {
+        bestScore = current;
+        localStorage.setItem('orangePlusBest', bestScore);
+        document.getElementById('best-score').textContent = bestScore;
+    }
+}
+
+// Кнопка сброса рекорда БЕЗ перезагрузки
+document.getElementById('reset-btn').addEventListener('click', function() {
+    if (confirm('Вы точно хотите удалить лучший результат? Это действие нельзя отменить.')) {
+        localStorage.removeItem('orangePlusBest');
+        bestScore = 0;
+        document.getElementById('best-score').textContent = '0';
+    }
+});
+
+
+// --- ОСНОВНОЙ КОД ИГРЫ ---
 const gameContainer = document.getElementById('game-container');
 const player = document.getElementById('player');
 const scoreboard = document.getElementById('scoreboard');
-let score=0, lives=3, speed=2;
-gameContainer.addEventListener('mousemove', e=>{ let x=e.clientX-gameContainer.getBoundingClientRect().left-30; if(x<0)x=0; if(x>540)x=540; player.style.left=x+'px'; });
-gameContainer.addEventListener('touchmove', e=>{ e.preventDefault(); let x=e.touches[0].clientX-gameContainer.getBoundingClientRect().left-30; if(x<0)x=0; if(x>540)x=540; player.style.left=x+'px'; }, {passive:false});
-function spawnItem(){ const item=document.createElement('div'); const type=Math.random()>0.7?'minus':'plus'; item.classList.add('item',type); const size=Math.random()*20+30; item.style.width=size+'px'; item.style.height=size+'px'; item.style.left=Math.random()*(560-size)+'px'; const duration=Math.random()*1.5+2/speed; item.style.animationDuration=duration+'s'; gameContainer.appendChild(item); setTimeout(()=>{ if(item.parentNode){ item.remove(); if(type==='minus') loseLife(); } }, duration*1000); const checkCollision=setInterval(()=>{ const p=player.getBoundingClientRect(), i=item.getBoundingClientRect(); if(p.left<i.right && p.right>i.left && p.top<i.bottom && p.bottom>i.top){ clearInterval(checkCollision); item.remove(); if(type==='plus'){ score+=Math.floor(size); updateScore(); if(score%10===0&&score>0)speed+=0.2;} else loseLife(); }}, 50); }
-function updateScore(){ scoreboard.textContent=`Счет: ${score} | Жизни: ${lives}`; }
-function loseLife(){ lives--; updateScore(); player.style.boxShadow='0 0 30px red'; setTimeout(()=>player.style.boxShadow='0 0 15px blue', 200); if(lives<=0){ clearInterval(gameInterval); alert(`Игра окончена!\nВаш счет: ${score}\nОбновите страницу.`);}}
-updateScore(); const gameInterval=setInterval(spawnItem, 800);
+
+let score = 0;
+let lives = 3;
+let speed = 2;
+let gameInterval;
+
+// Управление мышью
+gameContainer.addEventListener('mousemove', (e) => {
+    const rect = gameContainer.getBoundingClientRect();
+    let x = e.clientX - rect.left - player.offsetWidth / 2;
+    x = Math.max(0, Math.min(x, gameContainer.offsetWidth - player.offsetWidth));
+    player.style.left = x + 'px';
+});
+
+// Управление пальцем (для телефона)
+gameContainer.addEventListener('touchmove', (e) => {
+    e.preventDefault(); 
+    const rect = gameContainer.getBoundingClientRect();
+    let x = e.touches[0].clientX - rect.left - player.offsetWidth / 2;
+    x = Math.max(0, Math.min(x, gameContainer.offsetWidth - player.offsetWidth));
+    player.style.left = x + 'px';
+}, { passive: false });
+
+function spawnItem() {
+    const item = document.createElement('div');
+    // В 30% случаев падает опасный минус
+    const type = Math.random() > 0.7 ? 'minus' : 'plus'; 
+    item.classList.add('item', type);
+    
+    const size = Math.random() * 20 + 30; 
+    item.style.width = size + 'px';
+    item.style.height = size + 'px';
+    
+    const startPos = Math.random() * (gameContainer.offsetWidth - size);
+    item.style.left = startPos + 'px';
+    
+    const duration = Math.random() * 1.5 + 2 / speed;
+    item.style.animationDuration = duration + 's';
+    
+    gameContainer.appendChild(item);
+
+    // Если предмет улетел вниз сам по себе
+    setTimeout(() => {
+        if (item.parentNode) {
+            item.remove();
+            if (type === 'minus') {
+                loseLife(); 
+            }
+        }
+    }, duration * 1000);
+
+    // Проверка столкновения
+    const checkCollision = setInterval(() => {
+        const p = player.getBoundingClientRect();
+        const i = item.getBoundingClientRect();
+
+        if (p.left < i.right && p.right > i.left && p.top < i.bottom && p.bottom > i.top) {
+            clearInterval(checkCollision);
+            item.remove();
+            
+            if (type === 'plus') {
+                score += Math.floor(size); 
+                updateScore();
+                updateBestScore(score); // Проверяем рекорд при каждом пойманном плюсе
+                increaseDifficulty();
+            } else {
+                loseLife();
+            }
+        }
+    }, 50);
+}
+
+function updateScore() {
+    scoreboard.textContent = `Счет: ${score} | Жизни: ${lives}`;
+}
+
+function loseLife() {
+    lives--;
+    updateScore();
+    player.style.boxShadow = '0 0 30px red';
+    setTimeout(() => {
+        player.style.boxShadow = '0 0 15px blue';
+    }, 200);
+
+    if (lives <= 0) {
+        endGame();
+    }
+}
+
+function increaseDifficulty() {
+    if (score % 10 === 0 && score > 0) {
+        speed += 0.2;
+    }
+}
+
+function endGame() {
+    clearInterval(gameInterval);
+    alert(`Игра окончена!\nВаш финальный счет: ${score}\nОбновите страницу, чтобы сыграть снова.`);
+}
+
+// Запуск цикла игры
+updateScore();
+gameInterval = setInterval(spawnItem, 800);
 </script>
+
+<!-- Исправленный Service Worker: он теперь ищет только ТОЧНО СУЩЕСТВУЮЩИЙ файл index.html -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(registration => {
+        console.log('SW зарегистрирован:', registration.scope);
+      })
+      .catch(err => {
+        console.error('Ошибка SW:', err);
+      });
+  });
+}
+</script>
+
 </body>
 </html>
